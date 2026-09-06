@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Amped Fabrication — Dual VFD</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%2314160f' width='32' height='32'/%3E%3Cpath fill='%23e3a21a' d='M4 4h24v8H4zm0 16h24v8H4z'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="mark" aria-hidden="true"></div>
+      <div>
+        <p class="co">Amped Fabrication · Wenatchee WA</p>
+        <h1>Dual VFD PoE Controller</h1>
+      </div>
+    </div>
+    <div class="meta">
+      <span id="badge-mock" class="pill hidden">MOCK</span>
+      <span id="badge-hb" class="pill ok">HEARTBEAT</span>
+      <span id="badge-net" class="pill ok">NET</span>
+      <span id="uptime" class="dim">—</span>
+    </div>
+  </header>
+
+  <section class="temps" id="temps">
+    <article class="temp-card" data-id="ambient">
+      <h3>Ambient</h3>
+      <p class="reading">—<small>°C</small></p>
+    </article>
+    <article class="temp-card" data-id="water_in">
+      <h3>Water in</h3>
+      <p class="reading">—<small>°C</small></p>
+    </article>
+    <article class="temp-card" data-id="water_out">
+      <h3>Water out</h3>
+      <p class="reading">—<small>°C</small></p>
+    </article>
+  </section>
+
+  <main class="vfds">
+    <section class="vfd" data-ch="1">
+      <header>
+        <p class="ch">Channel 1</p>
+        <h2>Pump</h2>
+        <span class="fault-flag" hidden>FAULT</span>
+      </header>
+      <div class="mode">
+        <button type="button" data-mode="manual" class="on">Manual</button>
+        <button type="button" data-mode="auto">Auto (temp)</button>
+      </div>
+      <label class="speed">
+        <span>Speed <strong class="pct">0</strong>%</span>
+        <input type="range" min="0" max="100" step="1" value="0" />
+      </label>
+      <dl class="ao">
+        <div><dt>0–10 V</dt><dd class="volts">0.000 V</dd></div>
+        <div><dt>4–20 mA</dt><dd class="ma">4.000 mA</dd></div>
+      </dl>
+      <div class="run-row">
+        <button type="button" class="run">Run</button>
+        <p class="state dim">Stopped</p>
+      </div>
+    </section>
+
+    <section class="vfd" data-ch="2">
+      <header>
+        <p class="ch">Channel 2</p>
+        <h2>Cooler</h2>
+        <span class="fault-flag" hidden>FAULT</span>
+      </header>
+      <div class="mode">
+        <button type="button" data-mode="manual" class="on">Manual</button>
+        <button type="button" data-mode="auto">Auto (temp)</button>
+      </div>
+      <label class="speed">
+        <span>Speed <strong class="pct">0</strong>%</span>
+        <input type="range" min="0" max="100" step="1" value="0" />
+      </label>
+      <dl class="ao">
+        <div><dt>0–10 V</dt><dd class="volts">0.000 V</dd></div>
+        <div><dt>4–20 mA</dt><dd class="ma">4.000 mA</dd></div>
+      </dl>
+      <div class="run-row">
+        <button type="button" class="run">Run</button>
+        <p class="state dim">Stopped</p>
+      </div>
+    </section>
+  </main>
+
+  <section class="settings">
+    <h2>Settings</h2>
+    <form id="settings-form">
+      <label>Heartbeat timeout (ms)
+        <input name="heartbeat_timeout_ms" type="number" min="0" step="500" value="15000" />
+      </label>
+      <label class="check">
+        <input name="interlock_cooler_requires_pump" type="checkbox" />
+        Cooler only if pump running
+      </label>
+      <label>Pump failsafe
+        <select name="failsafe_1">
+          <option value="zero">0%</option>
+          <option value="hold">Hold last</option>
+          <option value="preset">Preset</option>
+        </select>
+      </label>
+      <label>Pump preset %
+        <input name="preset_pct_1" type="number" min="0" max="100" step="1" value="0" />
+      </label>
+      <label>Cooler failsafe
+        <select name="failsafe_2">
+          <option value="zero">0%</option>
+          <option value="hold">Hold last</option>
+          <option value="preset">Preset</option>
+        </select>
+      </label>
+      <label>Cooler preset %
+        <input name="preset_pct_2" type="number" min="0" max="100" step="1" value="0" />
+      </label>
+      <label>Pump analog
+        <select name="analog_path_1">
+          <option value="both">0–10 V and 4–20 mA</option>
+          <option value="voltage">0–10 V only</option>
+          <option value="current">4–20 mA only</option>
+        </select>
+      </label>
+      <label>Cooler analog
+        <select name="analog_path_2">
+          <option value="both">0–10 V and 4–20 mA</option>
+          <option value="voltage">0–10 V only</option>
+          <option value="current">4–20 mA only</option>
+        </select>
+      </label>
+      <label>Outdoor band low °C
+        <input name="outdoor_low_c" type="number" step="0.5" value="5" />
+      </label>
+      <label>Outdoor band high °C
+        <input name="outdoor_high_c" type="number" step="0.5" value="30" />
+      </label>
+      <label>Water band low °C
+        <input name="water_low_c" type="number" step="0.5" value="10" />
+      </label>
+      <label>Water band high °C
+        <input name="water_high_c" type="number" step="0.5" value="40" />
+      </label>
+      <label>API key (sent as X-Api-Key, stored in this browser only)
+        <input name="client_api_key" type="password" autocomplete="off" placeholder="empty = open LAN" />
+      </label>
+      <div class="form-actions">
+        <button type="submit">Save settings</button>
+        <button type="button" id="btn-fault-1" class="ghost mock-only hidden">Simulate pump fault</button>
+        <button type="button" id="btn-fault-2" class="ghost mock-only hidden">Simulate cooler fault</button>
+      </div>
+      <p id="settings-msg" class="dim"></p>
+    </form>
+  </section>
+
+  <footer>
+    <p>v<span id="fw-ver">0.1.0</span> · GP8413 DAC · PoE logic · MIT · Amped Fabrication</p>
+  </footer>
+  <script src="app.js"></script>
+</body>
+</html>
