@@ -24,6 +24,7 @@ bool DigitalIo::begin() {
   fault_[0] = fault_[1] = false;
   return true;
 #else
+  // Active-high RUN: low at boot keeps coils off (dry FWD–COM open = stop).
   pinMode(AMPED_PIN_RUN1, OUTPUT);
   pinMode(AMPED_PIN_RUN2, OUTPUT);
   digitalWrite(AMPED_PIN_RUN1, LOW);
@@ -39,6 +40,7 @@ void DigitalIo::set_run(int channel, bool on) {
   if (channel < 0 || channel >= kChannelCount) return;
   run_[channel] = on;
 #if !AMPED_MOCK
+  // HIGH energizes the coil → NO dry contacts close VFD FWD to COM.
   digitalWrite(run_pin(channel), on ? HIGH : LOW);
 #endif
 }

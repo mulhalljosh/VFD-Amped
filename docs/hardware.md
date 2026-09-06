@@ -19,23 +19,23 @@ Amped Fabrication dual-VFD PoE controller. Brain is a **Waveshare ESP32-S3-ETH c
               └──┬────┬────┬────┬───┘
            I2C   │  1W │GPIO│UART│
                  │     │    │    │
-         ┌───────▼─┐   │    │    └──────► isolated RS-485
-         │ GP8413  │   │    │              Modbus RTU master
-         │ 15-bit  │   │    │              (optional)
-         │ dual DAC│   │    │
-         └──┬───┬──┘   │    │
-        VOUT0 VOUT1    │    ├─ RUN1 / RUN2  relay drivers
-         0-10V 0-10V   │    └─ FAULT1 / FAULT2 opto-in
-            │    │     │
-     pump AO│    │cooler AO
-            │    │
-            └────┼──────────────► optional 4–20 mA path
-                 │                 (see Current loops)
-                 │
-                 └─ 3× DS18B20 on one 1-Wire bus
-                    (1 onboard + 2 waterproof)
+         ┌───────▼────────┐  │    │    └──────► isolated RS-485
+         │ I2C analog     │  │    │              Modbus RTU master
+         │                │  │    │              (optional)
+         │ GP8413 @ 0x58  │  │    ├─ RUN1 / RUN2  MOSFET → relay
+         │  VOUT0 pump    │  │    │  dry FWD–COM
+         │  VOUT1 cooler  │  │    └─ FAULT1 / FAULT2 opto-in
+         │                │  │
+         │ Current DAC    │  │
+         │  GP8313/GP8600 │  │
+         │  @ 0x59 / 0x5A │  │
+         │  4–20 mA/ch    │  │
+         └────┬──────┬────┘  │
+              │      │       │
+         0–10 V   4–20 mA    └─ 3× DS18B20 on one 1-Wire bus
+         + loops              (1 onboard + 2 waterproof)
 
-        DIN 24 V (optional, isolated) ──► current-loop transmitters only
+        DIN 24 V (optional, isolated) ──► current-DAC analog/compliance only
 ```
 
 ## Brain — Waveshare ESP32-S3-ETH + PoE
@@ -77,34 +77,53 @@ v0.1 analog speed is a **Linearin / DFRobot GP8413** 15-bit I2C DAC. PWM-filtere
 | Transfer | `VOUT = 10 V × code / 0x7FFF` |
 | Registers | ch0 = `0x02`, ch1 = `0x04`, LSB then MSB |
 
-Firmware HAL (`src/hal/dac.cpp`) speaks this protocol. Mock mode stores the same 15-bit codes and reports volts / mA without a bus.
+Firmware HAL (`src/hal/dac.cpp`) speaks this protocol. Mock mode stores the same 15-bit codes and reports volts without a bus.
 
-### 4–20 mA
+### 4–20 mA — companion current DAC (locked)
 
-The GP8413 silicon is **voltage-only** (0–5 V / 0–10 V). The product lock still allows 0–10 V **and/or** 4–20 mA per channel. v0.1 software maps speed to both:
+GP8413 does **not** generate loop current. 4–20 mA is a **separate I2C current DAC** (Linearin **GP8313 / GP8600 class**), not a V/I transmitter hung on GP8413 VOUT.
 
-- Voltage: `0–10 V` linear with `speed_pct`
-- Current: `4–20 mA` linear with `speed_pct` (`0% → 4 mA`, `100% → 20 mA`)
+| Property | Lock |
+| --- | --- |
+| Family | GP8313 (15-bit, 4–20 mA) or GP8600 (16-bit, 0–10 V / 4–20 mA used as current) |
+| Bus | Same I2C as GP8413 (GPIO16/17) |
+| Scaling | `4 mA + 16 mA × speed_pct / 100` (`0% → 4 mA`, `100% → 20 mA`) |
+| Codes | 15-bit `0…0x7FFF` in firmware (GP8600 16-bit mapping is a bring-up detail if that exact chip is purchased) |
 
-Hardware realization is an open (see `OPEN_QUESTIONS.md`):
+**Address straps** (Linearin A2/A1/A0, same `0x58`–`0x5F` family as GP8413):
 
-1. **Preferred interpretation of “via GP8413”:** same 0–10 V into an isolated V/I transmitter, loop-powered from the optional DIN 24 V rail.
-2. **Alternate:** second Linearin current DAC (GP8313 / GP8600) on I2C `0x59`. The HAL already has a hook for a companion current write.
+| A2 | A1 | A0 | Addr | Device |
+| --- | --- | --- | --- | --- |
+| 0 | 0 | 0 | `0x58` | GP8413 voltage (locked) |
+| 1 | 0 | 0 | `0x59` | Current DAC — pump 4–20 mA (1-ch) **or** dual current IOUT0/IOUT1 |
+| 0 | 1 | 0 | `0x5A` | Current DAC — cooler 4–20 mA (second 1-ch GP8313/GP8600) |
 
-Do not share PoE logic ground with the 24 V loop supply.
+**Channel map**
+
+- Two 1-ch parts (typical GP8313 / GP8600): `0x59` = pump IOUT, `0x5A` = cooler IOUT.
+- One dual-channel current DAC at `0x59`: IOUT0 / ch0 = pump, IOUT1 / ch1 = cooler. Leave `0x5A` unpopulated.
+
+The HAL writes **current codes to the companion DAC address(es)** as real I2C transactions. It does not derive 4–20 mA from GP8413 voltage. DIN 24 V (isolated) feeds the current DAC’s analog / loop-compliance rail only. Do not share that return with PoE logic ground.
 
 ## Digital I/O
 
 | Signal | Direction | Isolation | Notes |
 | --- | --- | --- | --- |
-| RUN1 (pump) | MCU → VFD | Relay dry contact | VFD FWD / DI “run” |
-| RUN2 (cooler) | MCU → VFD | Relay dry contact | Independent of ch1 |
+| RUN1 (pump) | MCU → VFD | Relay **dry** FWD–COM | Active-high GPIO; coil on = run |
+| RUN2 (cooler) | MCU → VFD | Relay **dry** FWD–COM | Independent of ch1 |
 | FAULT1 | VFD → MCU | Optocoupler | Active-low at MCU (opto pulls down) |
 | FAULT2 | VFD → MCU | Optocoupler | Same |
 
-Relay coils are driven from the **5 V logic rail** through a MOSFET + flyback. Contacts are dry into the VFD — do not source 24 V from PoE.
+### RUN polarity (locked)
 
-On a channel fault the controller drops that RUN relay and applies the configured failsafe analog action.
+RUN is a **dry contact into the VFD FWD–COM pair**. The MCU does not source 24 V onto the drive digital input.
+
+1. Firmware drives RUN GPIO **active-high**.
+2. MOSFET turns on → **5 V logic-rail relay coil energizes**.
+3. Normally-open contacts **close**, tying VFD **FWD** to **COM** → run.
+4. GPIO low, power loss, or a dropped coil **opens** the contacts → stop (fail-safe).
+
+Boot leaves both RUN GPIOs low so the relays are de-energized. Do not wire a sourced 24 V DI from this board. On a channel fault the controller de-energizes that RUN relay and applies the configured failsafe analog action.
 
 ## Temperatures
 
@@ -126,8 +145,8 @@ UART1 + DE/RE through an isolated transceiver (ISO3082 / MAX14878 class). Firmwa
 
 | Domain | Source | Feeds | Isolated from |
 | --- | --- | --- | --- |
-| Logic | PoE 802.3af → 5 V → 3.3 V | ESP32, W5500, GP8413 I2C, 1-Wire, relay coils | Field 24 V, RS-485, opto, current loops |
-| Field analog (optional) | DIN 24 V | 4–20 mA transmitters only | Logic |
+| Logic | PoE 802.3af → 5 V → 3.3 V | ESP32, W5500, GP8413 + current-DAC I2C, 1-Wire, relay coils | Field 24 V, RS-485, opto, current loops |
+| Field analog (optional) | DIN 24 V | Companion current-DAC analog / loop compliance only | Logic |
 | VFD | Customer 3-phase / VFD supply | Motors | Everything on this board |
 
 PoE class 0/3 budget is tight once two relay coils and the W5500 are on. Keep analog loop power off PoE.
@@ -145,5 +164,6 @@ PoE class 0/3 budget is tight once two relay coils and the W5500 are on. Keep an
 - Camera, TF card, RGB show LED as a product feature
 - PWM analog
 - Non-isolated RS-485
-- Driving VFD run from a GPIO without a relay
+- Driving VFD run from a GPIO without a relay, or sourcing 24 V onto FWD
+- 4–20 mA via V/I transmitter from GP8413 0–10 V (rejected — companion current DAC only)
 - Mixing DIN 24 V return with PoE ground

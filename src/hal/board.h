@@ -9,6 +9,8 @@
 
 #define AMPED_PIN_ONEWIRE 8
 
+// RUN: active-high GPIO → MOSFET → 5 V coil. NO dry contacts close VFD FWD–COM.
+// Coil off / power loss = contacts open = stop. Do not source 24 V onto FWD.
 #define AMPED_PIN_RUN1 38
 #define AMPED_PIN_FAULT1 39
 #define AMPED_PIN_RUN2 40
@@ -28,4 +30,5 @@
 #define AMPED_ETH_INT 10
 
 #define AMPED_I2C_GP8413 0x58
-#define AMPED_I2C_CURRENT 0x59
+#define AMPED_I2C_CURRENT_PUMP 0x59
+#define AMPED_I2C_CURRENT_COOLER 0x5A

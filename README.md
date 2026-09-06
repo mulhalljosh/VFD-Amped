@@ -2,7 +2,7 @@
 
 Shop-floor web controller for **two independent VFD channels** (pump = ch1, cooler = ch2). Amped Fabrication, Wenatchee, WA.
 
-Locked v0.1 hardware: Waveshare **ESP32-S3-ETH class** brain, **802.3af PoE** for logic, **GP8413** 15-bit I2C DAC for real 0–10 V (optional 4–20 mA path), run relays, fault optos, 3× DS18B20, optional isolated RS-485.
+Locked v0.1 hardware: Waveshare **ESP32-S3-ETH class** brain, **802.3af PoE** for logic, **GP8413** @ `0x58` for real 0–10 V, **companion current DAC** (GP8313 / GP8600 class @ `0x59`/`0x5A`) for 4–20 mA, dry active-high RUN into VFD FWD–COM, fault optos, 3× DS18B20, optional isolated RS-485.
 
 This repo is the firmware + docs scaffold. **Mock mode builds and serves the GUI with no board attached.**
 
@@ -24,12 +24,12 @@ This repo is the firmware + docs scaffold. **Mock mode builds and serves the GUI
           ▼             ▼           ▼           ▼             ▼
       hal/dac       hal/io      hal/temps   hal/rs485     net/
       GP8413        RUN/FAULT   DS18B20     Modbus        MQTT/OTA
-      I2C DAC       relays      1-Wire      RTU master    stubs
+      + I-DAC       FWD–COM     1-Wire      RTU master    stubs
 ```
 
 | Layer | Owns | Must not own |
 | --- | --- | --- |
-| `hal/` | Pins, GP8413 registers, GPIO, 1-Wire, UART | HTTP, setpoints, failsafe policy |
+| `hal/` | Pins, GP8413 + companion current-DAC I2C, GPIO, 1-Wire, UART | HTTP, setpoints, failsafe policy |
 | `app/` | Modes, speed, interlock, heartbeat actions | I2C bytes, HTML |
 | `web/` | Routes, JSON, static files | DAC codes |
 | `net/` | MQTT publish, OTA, NVS blobs | VFD policy |
@@ -40,7 +40,7 @@ Mock vs hardware is a compile flag (`AMPED_MOCK`). Same API and UI.
 
 The brain is a **W5500 SPI Ethernet** module, not ESP32 native EMAC. Arduino-ESP32 already has `WebServer`, LittleFS, `Wire`, USB-CDC, OneWire, and known W5500 bring-up on this Waveshare board. That is the shortest path to a flashable image.
 
-HAL interfaces stay thin (GP8413 is a real I2C DAC driver, not a PWM hack) so an ESP-IDF port can replace `src/web/server.cpp` and the Arduino HAL bodies later without rewriting the controller or REST contract.
+HAL interfaces stay thin (GP8413 voltage + companion current DAC are real I2C writes, not PWM or a V/I transmitter) so an ESP-IDF port can replace `src/web/server.cpp` and the Arduino HAL bodies later without rewriting the controller or REST contract.
 
 **Default development path is the native mock** (`make`), which does not need PlatformIO or an ESP32 toolchain.
 
@@ -60,7 +60,7 @@ docs/hardware.md     electrical lock
 docs/io-map.md       GPIO + analog scaling
 docs/bom.md          v0.1 parts
 OPEN_QUESTIONS.md    decisions for Josh
-src/hal/             GP8413, relays, temps, RS-485
+src/hal/             GP8413 + current DAC, dry RUN relays, temps, RS-485
 src/app/             controller + failsafe
 src/web/             REST + HTTP
 src/net/             MQTT / OTA / NVS stubs

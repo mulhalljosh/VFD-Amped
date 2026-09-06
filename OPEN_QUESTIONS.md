@@ -2,16 +2,19 @@
 
 Amped Fabrication, Wenatchee WA. Locked v0.1 is in `docs/`. These are the decisions that still change hardware or the first field flash.
 
+## Locked (do not re-open)
+
+1. **4–20 mA = companion current DAC (Option B).** GP8413 @ `0x58` is 0–10 V only (VOUT0 = pump, VOUT1 = cooler). Loop current is a GP8313 / GP8600-class I2C DAC: `0x59` = pump (or dual IOUT0/IOUT1), `0x5A` = cooler when using two 1-ch parts. **Not** a V/I transmitter from GP8413 voltage.
+5. **RUN = dry contact into VFD FWD–COM, active-high.** GPIO high → MOSFET → 5 V coil → NO contacts close FWD to COM. Coil de-energized or power loss = contacts open = stop.
+
 ## Analog
 
-1. **GP8413 is voltage-only.** How do you want 4–20 mA realized — 0–10 V into a V/I transmitter (still “via GP8413”), or a second Linearin current DAC (GP8313 / GP8600)?
 2. One GP8413 for both VFDs (current lock: VOUT0 = pump, VOUT1 = cooler) or one DAC per drive?
 3. At STOP, should analog drop to 0 V / 4 mA or hold the last speed while RUN opens?
 4. Confirm 4 mA = 0% (standard) vs 0–20 mA on these drives.
 
 ## VFD digital
 
-5. RUN: dry contact into FWD, or sourced 24 V DI? Polarity?
 6. Fault: which terminals (ALM / FA / MA-MB) and is the VFD side a dry contact or 24 V? Active when faulted — we assumed opto, MCU active-low.
 7. Any “reset fault” output needed in v0.1?
 

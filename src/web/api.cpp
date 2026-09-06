@@ -256,10 +256,19 @@ bool run_self_tests() {
   if (allowed.status != 200) return false;
   cfg.api_key[0] = 0;
 
-  // GP8413 mapping: 100% → full-scale 10 V / 20 mA codes.
+  // GP8413 + companion current DAC: 100% → 10 V / 20 mA codes.
   if (DacGp8413::pct_to_code(100.0f) != DacGp8413::kFullScale) return false;
   if (DacGp8413::pct_to_ma(0.0f) < 3.99f || DacGp8413::pct_to_ma(0.0f) > 4.01f) return false;
   if (DacGp8413::pct_to_ma(100.0f) < 19.99f || DacGp8413::pct_to_ma(100.0f) > 20.01f) return false;
+
+  // Current path is a companion DAC write (does not touch GP8413 VOUT).
+  if (DacGp8413::kAddrCurrentPump != 0x59 || DacGp8413::kAddrCurrentCooler != 0x5A) return false;
+  dac().write_speed(0, 50.0f, AnalogPath::Voltage);
+  const uint16_t v_before = dac().code(0);
+  dac().write_speed(0, 25.0f, AnalogPath::Current);
+  if (dac().code(0) != v_before) return false;
+  if (dac().milliamps(0) < 7.9f || dac().milliamps(0) > 8.1f) return false;
+  dac().write_speed(0, 0.0f, AnalogPath::Both);
 
   return true;
 }

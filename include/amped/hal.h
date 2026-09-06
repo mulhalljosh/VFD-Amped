@@ -6,13 +6,17 @@
 
 namespace amped {
 
+// Analog HAL: GP8413 @ 0x58 (0–10 V) plus companion current DAC (GP8313/GP8600
+// class) for 4–20 mA. Current is a real I2C write, not a V/I from VOUT.
 class DacGp8413 {
  public:
   static constexpr uint8_t kAddrVoltage = 0x58;
-  static constexpr uint8_t kAddrCurrent = 0x59;
+  static constexpr uint8_t kAddrCurrentPump = 0x59;
+  static constexpr uint8_t kAddrCurrentCooler = 0x5A;
   static constexpr uint8_t kRegRange = 0x01;
   static constexpr uint8_t kRegCh0 = 0x02;
   static constexpr uint8_t kRegCh1 = 0x04;
+  static constexpr uint8_t kRegCurrentOut = 0x02;
   static constexpr uint8_t kRange10V = 0x77;
   static constexpr uint16_t kFullScale = 0x7FFF;
 
@@ -22,7 +26,9 @@ class DacGp8413 {
   float volts(int channel) const;
   float milliamps(int channel) const;
   uint16_t code(int channel) const;
+  uint16_t current_code(int channel) const;
   bool present() const { return present_; }
+  bool present_current() const { return present_current_; }
 
   static uint16_t pct_to_code(float speed_pct);
   static float code_to_volts(uint16_t code);
@@ -30,8 +36,12 @@ class DacGp8413 {
 
  private:
   bool write_channel_reg(uint8_t addr, uint8_t reg, uint16_t code15);
+  bool write_voltage(int channel, uint16_t code15);
+  bool write_companion_current(int channel, uint16_t code15);
   uint16_t codes_[kChannelCount] = {};
+  uint16_t current_codes_[kChannelCount] = {};
   bool present_ = false;
+  bool present_current_ = false;
 };
 
 class DigitalIo {

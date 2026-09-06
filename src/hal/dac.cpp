@@ -43,16 +43,37 @@ bool DacGp8413::write_channel_reg(uint8_t addr, uint8_t reg, uint16_t code15) {
 #endif
 }
 
+bool DacGp8413::write_voltage(int channel, uint16_t code15) {
+  codes_[channel] = code15;
+  const uint8_t reg = (channel == 0) ? kRegCh0 : kRegCh1;
+  return write_channel_reg(kAddrVoltage, reg, code15);
+}
+
+bool DacGp8413::write_companion_current(int channel, uint16_t code15) {
+  current_codes_[channel] = code15;
+  // Two 1-ch GP8313/GP8600: 0x59 = pump, 0x5A = cooler.
+  const uint8_t one_ch = (channel == 0) ? kAddrCurrentPump : kAddrCurrentCooler;
+  bool ok = write_channel_reg(one_ch, kRegCurrentOut, code15);
+  // Dual-channel current DAC at 0x59: IOUT0 = pump, IOUT1 = cooler.
+  const uint8_t dual_reg = (channel == 0) ? kRegCh0 : kRegCh1;
+  ok = write_channel_reg(kAddrCurrentPump, dual_reg, code15) && ok;
+  return ok;
+}
+
 bool DacGp8413::begin() {
+  codes_[0] = codes_[1] = 0;
+  current_codes_[0] = current_codes_[1] = 0;
 #if AMPED_MOCK
   present_ = true;
-  codes_[0] = codes_[1] = 0;
+  present_current_ = true;
   return true;
 #else
   Wire.begin(AMPED_PIN_I2C_SDA, AMPED_PIN_I2C_SCL, AMPED_I2C_FREQ_HZ);
   present_ = set_range_10v();
-  write_speed(0, 0.0f, AnalogPath::Both);
-  write_speed(1, 0.0f, AnalogPath::Both);
+  present_current_ = write_companion_current(0, 0);
+  present_current_ = write_companion_current(1, 0) && present_current_;
+  write_voltage(0, 0);
+  write_voltage(1, 0);
   return present_;
 #endif
 }
@@ -71,16 +92,12 @@ bool DacGp8413::set_range_10v() {
 bool DacGp8413::write_speed(int channel, float speed_pct, AnalogPath path) {
   if (channel < 0 || channel >= kChannelCount) return false;
   const uint16_t code15 = pct_to_code(speed_pct);
-  codes_[channel] = code15;
-  const uint8_t reg = (channel == 0) ? kRegCh0 : kRegCh1;
   bool ok = true;
   if (path == AnalogPath::Voltage || path == AnalogPath::Both) {
-    ok = write_channel_reg(kAddrVoltage, reg, code15) && ok;
+    ok = write_voltage(channel, code15) && ok;
   }
   if (path == AnalogPath::Current || path == AnalogPath::Both) {
-    // Companion current DAC (optional 0x59) or V/I transmitter driven by the
-    // same 0–10 V. Write is a no-op ACK miss on hardware without the chip.
-    write_channel_reg(kAddrCurrent, reg, code15);
+    ok = write_companion_current(channel, code15) && ok;
   }
   return ok;
 }
@@ -92,12 +109,17 @@ float DacGp8413::volts(int channel) const {
 
 float DacGp8413::milliamps(int channel) const {
   if (channel < 0 || channel >= kChannelCount) return 4.0f;
-  return 4.0f + 16.0f * (static_cast<float>(codes_[channel]) / static_cast<float>(kFullScale));
+  return 4.0f + 16.0f * (static_cast<float>(current_codes_[channel]) / static_cast<float>(kFullScale));
 }
 
 uint16_t DacGp8413::code(int channel) const {
   if (channel < 0 || channel >= kChannelCount) return 0;
   return codes_[channel];
+}
+
+uint16_t DacGp8413::current_code(int channel) const {
+  if (channel < 0 || channel >= kChannelCount) return 0;
+  return current_codes_[channel];
 }
 
 DacGp8413& dac() { return g_dac; }
