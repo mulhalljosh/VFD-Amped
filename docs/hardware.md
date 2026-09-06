@@ -1,6 +1,6 @@
 # Hardware (locked v0.1)
 
-Amped Fabrication dual-VFD PoE controller. Brain is a **Waveshare ESP32-S3-ETH class** board with the external **802.3af PoE module**. Field I/O lives on a carrier / DIN interconnect — this document is the electrical lock, not a finished PCB gerber.
+Amped Fabrication dual-VFD PoE controller. Brain is a **Waveshare ESP32-S3-ETH + PoE Module (B)**. Field I/O lives on a carrier in a **DIN rail box**. This document is the electrical lock, not a finished gerber.
 
 ## Block diagram
 
@@ -21,10 +21,10 @@ Amped Fabrication dual-VFD PoE controller. Brain is a **Waveshare ESP32-S3-ETH c
                  │     │    │    │
          ┌───────▼────────┐  │    │    └──────► isolated RS-485
          │ I2C analog     │  │    │              Modbus RTU master
-         │                │  │    │              (optional)
+         │                │  │    │              (populated; map opt-in)
          │ GP8413 @ 0x58  │  │    ├─ RUN1 / RUN2  MOSFET → relay
          │  VOUT0 pump    │  │    │  dry FWD–COM
-         │  VOUT1 cooler  │  │    └─ FAULT1 / FAULT2 opto-in
+         │  VOUT1 cooler  │  │    └─ FAULT1 / FAULT2 opto (faulted=closed)
          │                │  │
          │ Current DAC    │  │
          │  GP8313/GP8600 │  │
@@ -32,8 +32,8 @@ Amped Fabrication dual-VFD PoE controller. Brain is a **Waveshare ESP32-S3-ETH c
          │  4–20 mA/ch    │  │
          └────┬──────┬────┘  │
               │      │       │
-         0–10 V   4–20 mA    └─ 3× DS18B20 on one 1-Wire bus
-         + loops              (1 onboard + 2 waterproof)
+         0–10 V   4–20 mA    └─ 3× DS18B20 (ambient / water in / water out)
+         + loops                waterproof leads ~3–5 m
 
         DIN 24 V (optional, isolated) ──► current-DAC analog/compliance only
 ```
@@ -45,7 +45,9 @@ Amped Fabrication dual-VFD PoE controller. Brain is a **Waveshare ESP32-S3-ETH c
 | MCU | ESP32-S3R8, Xtensa LX7 dual-core @ 240 MHz |
 | Memory | 8 MB OPI PSRAM, 16 MB flash |
 | Ethernet | W5500, 10/100, SPI (not IDF native EMAC) |
-| PoE | Waveshare PoE Module (B), **IEEE 802.3af**, logic rail only |
+| PoE | Waveshare **PoE Module (B)**, IEEE **802.3af class 0/3**, logic rail only |
+| Enclosure | **DIN rail box** (first build) |
+| Hostname | **amped-vfd.local** |
 | Debug | USB Type-C, USB-CDC / USB-JTAG (GPIO19 / GPIO20) |
 | Expansion | Pico-compatible header; camera and TF slot unused in v0.1 |
 
@@ -66,7 +68,7 @@ TF-card SPI (GPIO4/5/6/7) and the DVP camera bus are left free. Do not fight the
 
 ## Analog outputs — GP8413 (real DAC, not PWM)
 
-v0.1 analog speed is a **Linearin / DFRobot GP8413** 15-bit I2C DAC. PWM-filtered “fake 0–10 V” is out of spec.
+v0.1 analog voltage is **one dual** Linearin / DFRobot **GP8413** (both VFDs). PWM-filtered “fake 0–10 V” is out of spec. **STOP** writes **0 V / 4 mA** (not hold). **4 mA = 0%**.
 
 | Property | Value |
 | --- | --- |
@@ -111,8 +113,8 @@ The HAL writes **current codes to the companion DAC address(es)** as real I2C tr
 | --- | --- | --- | --- |
 | RUN1 (pump) | MCU → VFD | Relay **dry** FWD–COM | Active-high GPIO; coil on = run |
 | RUN2 (cooler) | MCU → VFD | Relay **dry** FWD–COM | Independent of ch1 |
-| FAULT1 | VFD → MCU | Optocoupler | Active-low at MCU (opto pulls down) |
-| FAULT2 | VFD → MCU | Optocoupler | Same |
+| FAULT1 | VFD → MCU | Optocoupler | VFD **dry** contact; **faulted = closed**; MCU **active-low** |
+| FAULT2 | VFD → MCU | Optocoupler | Same. Map ALM / FA / MA–MB per drive at commission |
 
 ### RUN polarity (locked)
 
@@ -123,23 +125,27 @@ RUN is a **dry contact into the VFD FWD–COM pair**. The MCU does not source 24
 3. Normally-open contacts **close**, tying VFD **FWD** to **COM** → run.
 4. GPIO low, power loss, or a dropped coil **opens** the contacts → stop (fail-safe).
 
-Boot leaves both RUN GPIOs low so the relays are de-energized. Do not wire a sourced 24 V DI from this board. On a channel fault the controller de-energizes that RUN relay and applies the configured failsafe analog action.
+Boot leaves both RUN GPIOs low so the relays are de-energized. Do not wire a sourced 24 V DI from this board. On STOP or a channel fault the controller de-energizes that RUN relay and writes **0 V / 4 mA**. **No fault-reset output** in v0.1.
+
+### Fault sense (locked)
+
+The VFD presents a **dry contact** that is **closed when faulted**. That closure drives the opto LED; the MCU pin is pulled **low** (active-low). Terminal name (ALM, FA, MA–MB, …) is chosen **per drive at commission** — family is mix / configurable.
 
 ## Temperatures
 
 One 1-Wire bus, 4.7 kΩ pull-up to 3.3 V:
 
-| Probe | Type | Role (default labels) |
+| JSON `id` | Type | Role |
 | --- | --- | --- |
-| `onboard` | DS18B20 TO-92 | Panel / PCB |
-| `probe1` | Waterproof DS18B20 | Process |
-| `probe2` | Waterproof DS18B20 | Ambient / secondary |
+| `ambient` | DS18B20 TO-92 onboard | Outdoor / panel ambient |
+| `water_in` | Waterproof DS18B20, **~3–5 m** | Water in |
+| `water_out` | Waterproof DS18B20, **~3–5 m** | Water out |
 
-ROM IDs are stored in NVS once assigned. Mock mode synthesizes slowly changing values.
+ROM IDs are stored in NVS once assigned. Auto mode uses a **temp-band stub** (outdoor → pump, water out → cooler).
 
-## Isolated RS-485 (optional)
+## Isolated RS-485 (populated)
 
-UART1 + DE/RE through an isolated transceiver (ISO3082 / MAX14878 class). Firmware is a **Modbus RTU master stub** only — no vendor register map in v0.1.
+UART1 + DE/RE through an isolated transceiver (ISO3082 / MAX14878 class) **on the first PCB**. Firmware brings the UART up; **Modbus RTU master is opt-in** until a drive map is commissioned (mix / configurable).
 
 ## Power domains
 
@@ -149,21 +155,25 @@ UART1 + DE/RE through an isolated transceiver (ISO3082 / MAX14878 class). Firmwa
 | Field analog (optional) | DIN 24 V | Companion current-DAC analog / loop compliance only | Logic |
 | VFD | Customer 3-phase / VFD supply | Motors | Everything on this board |
 
-PoE class 0/3 budget is tight once two relay coils and the W5500 are on. Keep analog loop power off PoE.
+PoE **802.3af class 0/3**. **Measure current with both RUN coils energized** before calling the budget done. Keep analog loop power off PoE.
 
-## Failsafes (hardware + firmware)
+## Failsafes and control (locked)
 
-- Per-channel analog action on comms loss: **hold**, **0%**, or **preset**
-- Network heartbeat (any authenticated `/api/*` refreshes it; timeout applies failsafe)
-- Optional **cooler-only-if-pump** interlock (software; hardwire is an open)
-- Fault opto forces RUN off for that channel
-- DAC comes up at 0 V / 4 mA until the app writes a command
+- Default failsafe **both channels: 0% analog + RUN open**
+- Heartbeat: any GUI / API / later HA client; **15 s** timeout
+- Cooler-only-if-pump: **software only**, default off
+- Auto = **temp-band** (outdoor / water); law is stubbed
+- STOP / fault → **0 V / 4 mA**, RUN open
+- Auth: single API key. MQTT: publish stub only. OTA: off (USB-C first)
+- mDNS: **amped-vfd.local**
 
 ## What is not in v0.1
 
 - Camera, TF card, RGB show LED as a product feature
 - PWM analog
-- Non-isolated RS-485
+- Leaving RS-485 unpopulated (transceiver is on the first PCB)
+- Fault-reset output
+- Hardwired cooler-only-if-pump series contact
 - Driving VFD run from a GPIO without a relay, or sourcing 24 V onto FWD
 - 4–20 mA via V/I transmitter from GP8413 0–10 V (rejected — companion current DAC only)
 - Mixing DIN 24 V return with PoE ground

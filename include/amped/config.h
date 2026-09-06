@@ -14,12 +14,25 @@ struct ChannelConfig {
   AnalogPath analog_path = AnalogPath::Both;
 };
 
+// v0.1 auto = outdoor/water temp-band. Law is stubbed; these are the hooks.
+struct TempBandConfig {
+  float outdoor_low_c = 5.0f;
+  float outdoor_high_c = 30.0f;
+  float water_low_c = 10.0f;
+  float water_high_c = 40.0f;
+};
+
 struct AppConfig {
   ChannelConfig ch[kChannelCount];
   uint32_t heartbeat_timeout_ms = 15000;
   bool interlock_cooler_requires_pump = false;
   char api_key[64] = {};
   char hostname[32] = "amped-vfd";
+  char drive_family[24] = "mix";
+  bool rs485_populated = true;
+  bool modbus_enabled = false;
+  bool ota_enabled = false;
+  TempBandConfig temp_band{};
   uint64_t temp_rom[kTempCount] = {};
 };
 

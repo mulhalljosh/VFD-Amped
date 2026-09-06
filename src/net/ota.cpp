@@ -1,3 +1,4 @@
+#include "amped/controller.h"
 #include "amped/net.h"
 #include "amped/version.h"
 
@@ -8,11 +9,12 @@
 namespace amped {
 
 void ota_begin() {
+  // USB-C first. OTA is a later stub — off unless config.ota_enabled.
 #if AMPED_MOCK
   return;
 #else
-  // Stub: hostname + no password until NVS/secrets land a real policy.
-  ArduinoOTA.setHostname("amped-vfd");
+  if (!controller().config().ota_enabled) return;
+  ArduinoOTA.setHostname(controller().config().hostname);
   ArduinoOTA.begin();
 #endif
 }

@@ -128,6 +128,10 @@
         f["preset_pct_" + c.channel].value = c.preset_pct;
         f["analog_path_" + c.channel].value = c.analog_path;
       });
+      f.outdoor_low_c.value = s.outdoor_low_c;
+      f.outdoor_high_c.value = s.outdoor_high_c;
+      f.water_low_c.value = s.water_low_c;
+      f.water_high_c.value = s.water_high_c;
       f.client_api_key.value = state.key;
     } catch (err) {
       $("#settings-msg").textContent = err.message;
@@ -148,6 +152,10 @@
       preset_pct_2: Number(f.preset_pct_2.value),
       analog_path_1: f.analog_path_1.value,
       analog_path_2: f.analog_path_2.value,
+      outdoor_low_c: Number(f.outdoor_low_c.value),
+      outdoor_high_c: Number(f.outdoor_high_c.value),
+      water_low_c: Number(f.water_low_c.value),
+      water_high_c: Number(f.water_high_c.value),
     };
     try {
       await api("/api/settings", {

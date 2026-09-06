@@ -1,6 +1,6 @@
 # I/O map (locked v0.1)
 
-Waveshare **ESP32-S3-ETH / ESP32-S3-POE-ETH** class. Pin numbers are ESP32-S3 GPIO, not Pico header silkscreen.
+Waveshare **ESP32-S3-ETH + PoE Module (B)**. Pin numbers are ESP32-S3 GPIO, not Pico header silkscreen. Hostname **amped-vfd.local**.
 
 Firmware constants live in `src/hal/board.h`. Treat that header as the single source of truth if a later PCB spins a pin.
 
@@ -25,12 +25,12 @@ TF card (4/5/6/7) and camera DVP are unused. Camera pins 1/2/15/18/38–42/47/48
 | I2C SCL | 17 | OD | 3.3 V, 4.7 kΩ pull-up | 400 kHz target |
 | 1-Wire DQ | 8 | OD | 3.3 V, 4.7 kΩ pull-up | 3× DS18B20 |
 | RUN1 pump | 38 | out | 3.3 V → MOSFET → 5 V coil | Active-high; dry FWD–COM |
-| FAULT1 pump | 39 | in | Opto, MCU pull-up | Active low = fault |
+| FAULT1 pump | 39 | in | Opto, MCU pull-up | VFD dry, faulted=closed → MCU low |
 | RUN2 cooler | 40 | out | same as RUN1 | Active-high; dry FWD–COM |
-| FAULT2 cooler | 41 | in | same as FAULT1 | Active low = fault |
-| RS485 TX | 1 | out | to isolator TXD | UART1 |
+| FAULT2 cooler | 41 | in | same as FAULT1 | Map ALM/FA per drive; no reset out |
+| RS485 TX | 1 | out | to isolator TXD | UART1 — **populated** |
 | RS485 RX | 2 | in | from isolator RXD | UART1 |
-| RS485 DE/RE | 42 | out | high = transmit | |
+| RS485 DE/RE | 42 | out | high = transmit | Modbus software opt-in |
 | Status LED | 21 | out | optional | Not required for v0.1 |
 
 ## I2C devices
@@ -64,25 +64,27 @@ Field terminals “Pump RUN A/B” / “Cooler RUN A/B” are the dry FWD–COM 
 | 50 | 16383 | 5.000 V | 12.00 mA |
 | 100 | 32767 | 10.000 V | 20.00 mA |
 
-`run = false` still writes analog 0% unless the channel failsafe is **hold** during a comms-loss event.
+**STOP** (`run = false`) and channel fault always write **0 V / 4 mA**. **4 mA = 0%**. Comms-loss failsafe default is the same (0% + RUN open). Hold/preset remain settings options only.
 
 ## 1-Wire index
 
-| Index | JSON `id` | Default label |
-| --- | --- | --- |
-| 0 | `onboard` | Onboard |
-| 1 | `probe1` | Probe 1 |
-| 2 | `probe2` | Probe 2 |
+| Index | JSON `id` | Label | Role |
+| --- | --- | --- | --- |
+| 0 | `ambient` | Ambient | Onboard outdoor / panel |
+| 1 | `water_in` | Water in | Waterproof, ~3–5 m |
+| 2 | `water_out` | Water out | Waterproof, ~3–5 m |
 
-Assign ROM64 values in NVS after first scan (`config.temp_rom[i]`).
+Assign ROM64 values in NVS after first scan (`config.temp_rom[i]`). Auto temp-band: outdoor (`ambient`) → pump, `water_out` → cooler.
 
-## RS-485 defaults (stub)
+## RS-485 (hardware on first PCB)
 
-| Setting | v0.1 default |
+| Setting | v0.1 lock |
 | --- | --- |
+| Transceiver | Isolated, **populated** |
 | Baud | 9600 |
-| Format | 8E1 (common VFD; confirm per drive) |
-| Mode | Modbus RTU master |
+| Format | 8E1 (confirm per drive) |
+| Mode | Modbus RTU master, **software opt-in** |
+| Drive family | **mix / configurable** |
 | Slaves | none commissioned |
 
 ## Connector intent (carrier)
@@ -93,10 +95,10 @@ Field side, Phoenix-style 5.08 mm (suggested):
 2. Pump 0–10 V+, 0–10 V−
 3. Pump 4–20 mA+, 4–20 mA− (if fitted)
 4. Pump RUN A/B (dry FWD–COM; closed = run)
-5. Pump FAULT+/FAULT− (from VFD, into opto)
+5. Pump FAULT A/B (VFD dry, closed = fault, into opto)
 6. Cooler — same set as pump
-7. RS-485 A/B/GND/SH
-8. DIN 24 V+ / 0 V (loops only)
-9. 1-Wire waterproof pigtails (DQ, 3V3, GND) ×2
+7. RS-485 A/B/GND/SH (populated)
+8. DIN 24 V+ / 0 V (current-DAC compliance only)
+9. 1-Wire: water in + water out pigtails (DQ, 3V3, GND), ~3–5 m
 
 Logic side: Pico header + PoE RJ45 + USB-C. No field 24 V on the Pico pins.

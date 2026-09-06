@@ -28,6 +28,9 @@ std::string status_json(const SystemStatus& s) {
     << ",\"interlock_enabled\":" << (s.interlock_enabled ? "true" : "false")
     << ",\"interlock_blocking_cooler\":" << (s.interlock_blocking_cooler ? "true" : "false")
     << ",\"product\":\"" << AMPED_PRODUCT << "\",\"company\":\"" << AMPED_COMPANY << "\""
+    << ",\"hostname\":\"" << json_escape(s.hostname ? s.hostname : "") << "\""
+    << ",\"mdns\":\"" << (s.mdns ? s.mdns : "amped-vfd.local") << "\""
+    << ",\"auto_law\":\"" << (s.auto_law ? s.auto_law : "temp_band") << "\""
     << ",\"vfds\":[";
   for (int i = 0; i < kChannelCount; ++i) {
     const VfdStatus& v = s.vfd[i];
@@ -39,7 +42,8 @@ std::string status_json(const SystemStatus& s) {
       << ",\"commanded_run\":" << (v.commanded_run ? "true" : "false")
       << ",\"fault\":" << (v.fault ? "true" : "false") << ",\"ao_volts\":" << fmt_f(v.ao_volts, 3)
       << ",\"ao_ma\":" << fmt_f(v.ao_ma, 3) << ",\"failsafe\":\"" << failsafe_name(v.failsafe)
-      << "\",\"analog_path\":\"" << analog_path_name(v.analog_path) << "\"}";
+      << "\",\"analog_path\":\"" << analog_path_name(v.analog_path) << "\""
+      << ",\"auto_law\":\"" << (v.auto_law && v.auto_law[0] ? v.auto_law : "") << "\"}";
   }
   o << "],\"temps\":[";
   for (int i = 0; i < kTempCount; ++i) {
@@ -76,7 +80,17 @@ std::string settings_json() {
     << ",\"interlock_cooler_requires_pump\":"
     << (c.interlock_cooler_requires_pump ? "true" : "false") << ",\"api_key_set\":"
     << (c.api_key[0] ? "true" : "false") << ",\"hostname\":\"" << json_escape(c.hostname)
-    << "\",\"channels\":[";
+    << "\",\"mdns\":\"amped-vfd.local\""
+    << ",\"drive_family\":\"" << json_escape(c.drive_family) << "\""
+    << ",\"rs485_populated\":" << (c.rs485_populated ? "true" : "false")
+    << ",\"modbus_enabled\":" << (c.modbus_enabled ? "true" : "false")
+    << ",\"ota_enabled\":" << (c.ota_enabled ? "true" : "false")
+    << ",\"auto_law\":\"temp_band\""
+    << ",\"outdoor_low_c\":" << fmt_f(c.temp_band.outdoor_low_c)
+    << ",\"outdoor_high_c\":" << fmt_f(c.temp_band.outdoor_high_c)
+    << ",\"water_low_c\":" << fmt_f(c.temp_band.water_low_c)
+    << ",\"water_high_c\":" << fmt_f(c.temp_band.water_high_c)
+    << ",\"channels\":[";
   for (int i = 0; i < kChannelCount; ++i) {
     if (i) o << ',';
     o << "{\"channel\":" << (i + 1) << ",\"failsafe\":\"" << failsafe_name(c.ch[i].failsafe)
@@ -169,6 +183,18 @@ HttpResponse api_handle(const char* method, const char* path, const char* body,
     if (json_get_string(body, "hostname", host) && host.size() < sizeof(c.hostname)) {
       std::snprintf(c.hostname, sizeof(c.hostname), "%s", host.c_str());
     }
+    std::string family;
+    if (json_get_string(body, "drive_family", family) && family.size() < sizeof(c.drive_family)) {
+      std::snprintf(c.drive_family, sizeof(c.drive_family), "%s", family.c_str());
+    }
+    bool mb = c.modbus_enabled;
+    if (json_get_bool(body, "modbus_enabled", mb)) c.modbus_enabled = mb;
+    float ol = c.temp_band.outdoor_low_c, oh = c.temp_band.outdoor_high_c;
+    float wl = c.temp_band.water_low_c, wh = c.temp_band.water_high_c;
+    if (json_get_float(body, "outdoor_low_c", ol)) c.temp_band.outdoor_low_c = ol;
+    if (json_get_float(body, "outdoor_high_c", oh)) c.temp_band.outdoor_high_c = oh;
+    if (json_get_float(body, "water_low_c", wl)) c.temp_band.water_low_c = wl;
+    if (json_get_float(body, "water_high_c", wh)) c.temp_band.water_high_c = wh;
     for (int i = 0; i < kChannelCount; ++i) {
       // Accept either nested objects (ignored by this tiny parser) or flat keys
       // failsafe_1 / preset_pct_1 / analog_path_1.
@@ -214,7 +240,12 @@ bool run_self_tests() {
   }
 
   HttpResponse t = api_handle("GET", "/api/temps", "", "");
-  if (t.status != 200 || t.body.find("onboard") == std::string::npos) return false;
+  if (t.status != 200 || t.body.find("ambient") == std::string::npos) return false;
+  if (t.body.find("water_in") == std::string::npos || t.body.find("water_out") == std::string::npos) {
+    return false;
+  }
+  if (st.body.find("amped-vfd.local") == std::string::npos) return false;
+  if (st.body.find("temp_band") == std::string::npos) return false;
 
   HttpResponse p = api_handle("POST", "/api/vfd/1",
                               "{\"mode\":\"manual\",\"speed_pct\":42,\"run\":true}", "");
@@ -226,6 +257,18 @@ bool run_self_tests() {
   HttpResponse c = api_handle("POST", "/api/vfd/2",
                               "{\"mode\":\"auto\",\"speed_pct\":10,\"run\":true}", "");
   if (c.status != 200 || controller().status().vfd[1].mode != VfdMode::Auto) return false;
+  if (!controller().status().vfd[1].auto_law ||
+      std::strcmp(controller().status().vfd[1].auto_law, "temp_band") != 0) {
+    return false;
+  }
+
+  // STOP → 0 V / 4 mA even if a speed setpoint remains.
+  api_handle("POST", "/api/vfd/1",
+             "{\"mode\":\"manual\",\"speed_pct\":55,\"run\":false}", "");
+  if (controller().status().vfd[0].ao_volts > 0.05f) return false;
+  if (controller().status().vfd[0].ao_ma < 3.99f || controller().status().vfd[0].ao_ma > 4.05f) {
+    return false;
+  }
 
   // Interlock: cooler must drop when pump is off.
   AppConfig& cfg = controller().config();
@@ -255,6 +298,15 @@ bool run_self_tests() {
   HttpResponse allowed = api_handle("GET", "/api/status", "", "lab-key");
   if (allowed.status != 200) return false;
   cfg.api_key[0] = 0;
+  cfg.heartbeat_timeout_ms = 15000;
+
+  // Defaults: failsafe zero both channels, hostname, RS-485 populated, Modbus off.
+  if (cfg.ch[0].failsafe != FailsafeAction::Zero || cfg.ch[1].failsafe != FailsafeAction::Zero) {
+    return false;
+  }
+  if (std::strcmp(cfg.hostname, "amped-vfd") != 0) return false;
+  if (!cfg.rs485_populated || cfg.modbus_enabled || cfg.ota_enabled) return false;
+  if (!rs485().hw_present() || rs485().enabled()) return false;
 
   // GP8413 + companion current DAC: 100% → 10 V / 20 mA codes.
   if (DacGp8413::pct_to_code(100.0f) != DacGp8413::kFullScale) return false;

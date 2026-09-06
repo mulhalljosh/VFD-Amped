@@ -55,7 +55,7 @@ bool DigitalIo::fault(int channel) const {
 #if AMPED_MOCK
   return fault_[channel];
 #else
-  // Opto pulls the pin low when the VFD asserts fault.
+  // VFD dry contact closed when faulted → opto on → MCU pin low.
   return digitalRead(fault_pin(channel)) == LOW;
 #endif
 }

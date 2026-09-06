@@ -14,6 +14,9 @@ constexpr int kChannelCount = 2;
 constexpr int kTempCount = 3;
 constexpr int kPump = 0;
 constexpr int kCooler = 1;
+constexpr int kTempAmbient = 0;
+constexpr int kTempWaterIn = 1;
+constexpr int kTempWaterOut = 2;
 
 inline const char* channel_name(int ch) {
   if (ch == kPump) return "pump";
@@ -66,6 +69,7 @@ struct VfdStatus {
   float ao_ma = 4.0f;
   FailsafeAction failsafe = FailsafeAction::Zero;
   AnalogPath analog_path = AnalogPath::Both;
+  const char* auto_law = "";
 };
 
 struct TempReading {
@@ -86,6 +90,9 @@ struct SystemStatus {
   bool interlock_blocking_cooler = false;
   bool mock = false;
   const char* version = "";
+  const char* hostname = "";
+  const char* mdns = "amped-vfd.local";
+  const char* auto_law = "temp_band";
 };
 
 }  // namespace amped

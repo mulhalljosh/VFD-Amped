@@ -6,8 +6,8 @@ Quantities are **per assembled controller**, not a production reel. Part numbers
 
 | Qty | Item | Example / notes | Est. |
 | --- | --- | --- | --- |
-| 1 | ESP32-S3 Ethernet + PoE brain | Waveshare **ESP32-S3-ETH** + **PoE Module (B)** (SKU class 28771 / wiki ESP32-S3-ETH). 802.3af PD, W5500, Pico header | Buy |
-| 1 | PoE source | 802.3af injector or switch port, for logic only | Site |
+| 1 | ESP32-S3 Ethernet + PoE brain | Waveshare **ESP32-S3-ETH** + **PoE Module (B)** (SKU class 28771). 802.3af class 0/3 PD, W5500, Pico header | Buy |
+| 1 | PoE source | 802.3af injector or switch. **Measure with both RUN coils on** | Site |
 | 1 | DIN 24 V PSU (optional) | 24 VDC, isolated, **companion current-DAC analog / loop compliance only**. Size for 2× 20 mA + DAC quiescent | Site |
 | 1 | Logic fuse / PTC | On 5 V after PoE module | Proto |
 
@@ -25,29 +25,29 @@ Quantities are **per assembled controller**, not a production reel. Part numbers
 | Qty | Item | Example / notes | Est. |
 | --- | --- | --- | --- |
 | 2 | SPDT relay + MOSFET driver | 5 V coil, **dry FWD–COM**. Active-high GPIO energizes coil → NO closes → run. AO3400 + 1N4148 flyback or a 2-ch relay board | Buy |
-| 2 | Fault optocoupler | PC817 / TLP281 class, VFD alarm into LED side with series R | Buy |
+| 2 | Fault optocoupler | PC817 / TLP281. VFD **dry** contact, **closed when faulted**, MCU active-low. No reset output | Buy |
 | 4 | TVS / clamp on field lines | On RUN contacts and fault inputs as appropriate | |
 
 ## Temperature
 
 | Qty | Item | Example / notes | Est. |
 | --- | --- | --- | --- |
-| 1 | DS18B20 TO-92 | Onboard / panel | Buy |
-| 2 | DS18B20 waterproof | 1 m+ pigtail, food/process grade as needed | Buy |
+| 1 | DS18B20 TO-92 | **Onboard ambient** | Buy |
+| 2 | DS18B20 waterproof | **Water in** + **water out**, **~3–5 m** pigtail | Buy |
 | 1 | 4.7 kΩ 1-Wire pull-up | To 3.3 V | |
 
-## Optional comms
+## Comms (first PCB)
 
 | Qty | Item | Example / notes | Est. |
 | --- | --- | --- | --- |
-| 1 | Isolated RS-485 transceiver | ISO3082, MAX14878, or Waveshare isolated RS-485 Pico hat | Optional |
+| 1 | Isolated RS-485 transceiver | ISO3082, MAX14878, or equivalent — **populate on first PCB**. Modbus map optional in software | Buy |
 | 1 | 120 Ω termination | Switchable | |
 
 ## Mechanics / interconnect
 
 | Qty | Item | Example / notes | Est. |
 | --- | --- | --- | --- |
-| 1 | DIN enclosure | Enough for brain + relays + DAC + terminals | Buy |
+| 1 | DIN rail box | First enclosure; brain + relays + DACs + terminals | Buy |
 | 1 | Carrier / proto / PCB | Pico header female, field terminals 5.08 mm | TBD |
 | 1 | Terminal set | Analog, run, fault, RS-485, 24 V, 1-Wire | Buy |
 | — | Hook-up / shielded analog pair | Drain to PE at one end | |
@@ -62,4 +62,4 @@ Quantities are **per assembled controller**, not a production reel. Part numbers
 
 ## Consumed by the VFD (customer)
 
-Each channel still needs a VFD that accepts **0–10 V and/or 4–20 mA** analog speed plus a digital RUN and a fault/alarm output. Drive family is not locked — see `OPEN_QUESTIONS.md`.
+Each channel still needs a VFD that accepts **0–10 V and/or 4–20 mA**, dry FWD–COM, and a **dry fault contact (closed when faulted)**. Drive family is **mix / configurable** at commission.

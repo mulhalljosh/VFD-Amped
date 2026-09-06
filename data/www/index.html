@@ -25,16 +25,16 @@
   </header>
 
   <section class="temps" id="temps">
-    <article class="temp-card" data-id="onboard">
-      <h3>Onboard</h3>
+    <article class="temp-card" data-id="ambient">
+      <h3>Ambient</h3>
       <p class="reading">—<small>°C</small></p>
     </article>
-    <article class="temp-card" data-id="probe1">
-      <h3>Probe 1</h3>
+    <article class="temp-card" data-id="water_in">
+      <h3>Water in</h3>
       <p class="reading">—<small>°C</small></p>
     </article>
-    <article class="temp-card" data-id="probe2">
-      <h3>Probe 2</h3>
+    <article class="temp-card" data-id="water_out">
+      <h3>Water out</h3>
       <p class="reading">—<small>°C</small></p>
     </article>
   </section>
@@ -48,7 +48,7 @@
       </header>
       <div class="mode">
         <button type="button" data-mode="manual" class="on">Manual</button>
-        <button type="button" data-mode="auto">Auto</button>
+        <button type="button" data-mode="auto">Auto (temp)</button>
       </div>
       <label class="speed">
         <span>Speed <strong class="pct">0</strong>%</span>
@@ -72,7 +72,7 @@
       </header>
       <div class="mode">
         <button type="button" data-mode="manual" class="on">Manual</button>
-        <button type="button" data-mode="auto">Auto</button>
+        <button type="button" data-mode="auto">Auto (temp)</button>
       </div>
       <label class="speed">
         <span>Speed <strong class="pct">0</strong>%</span>
@@ -132,6 +132,18 @@
           <option value="voltage">0–10 V only</option>
           <option value="current">4–20 mA only</option>
         </select>
+      </label>
+      <label>Outdoor band low °C
+        <input name="outdoor_low_c" type="number" step="0.5" value="5" />
+      </label>
+      <label>Outdoor band high °C
+        <input name="outdoor_high_c" type="number" step="0.5" value="30" />
+      </label>
+      <label>Water band low °C
+        <input name="water_low_c" type="number" step="0.5" value="10" />
+      </label>
+      <label>Water band high °C
+        <input name="water_high_c" type="number" step="0.5" value="40" />
       </label>
       <label>API key (sent as X-Api-Key, stored in this browser only)
         <input name="client_api_key" type="password" autocomplete="off" placeholder="empty = open LAN" />

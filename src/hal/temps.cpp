@@ -14,8 +14,8 @@ namespace {
 
 TempSensors g_temps;
 
-const char* kIds[kTempCount] = {"onboard", "probe1", "probe2"};
-const char* kLabels[kTempCount] = {"Onboard", "Probe 1", "Probe 2"};
+const char* kIds[kTempCount] = {"ambient", "water_in", "water_out"};
+const char* kLabels[kTempCount] = {"Ambient", "Water in", "Water out"};
 
 #if !AMPED_MOCK
 OneWire g_ow(AMPED_PIN_ONEWIRE);
@@ -32,9 +32,9 @@ bool TempSensors::begin() {
     temps_[i].valid = false;
   }
 #if AMPED_MOCK
-  temps_[0].celsius = 28.4f;
-  temps_[1].celsius = 42.1f;
-  temps_[2].celsius = 21.3f;
+  temps_[0].celsius = 21.3f;  // onboard ambient / outdoor
+  temps_[1].celsius = 42.1f;  // water in
+  temps_[2].celsius = 28.4f;  // water out
   temps_[0].valid = temps_[1].valid = temps_[2].valid = true;
   return true;
 #else
@@ -48,9 +48,9 @@ bool TempSensors::begin() {
 void TempSensors::poll() {
 #if AMPED_MOCK
   const float t = static_cast<float>(now_ms()) / 1000.0f;
-  temps_[0].celsius = 28.4f + 0.4f * std::sin(t / 7.0f);
+  temps_[0].celsius = 21.3f + 0.3f * std::sin(t / 13.0f);
   temps_[1].celsius = 42.1f + 1.2f * std::sin(t / 11.0f);
-  temps_[2].celsius = 21.3f + 0.3f * std::sin(t / 13.0f);
+  temps_[2].celsius = 28.4f + 0.4f * std::sin(t / 7.0f);
   temps_[0].valid = temps_[1].valid = temps_[2].valid = true;
 #else
   const int n = g_dt.getDeviceCount();

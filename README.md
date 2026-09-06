@@ -2,7 +2,7 @@
 
 Shop-floor web controller for **two independent VFD channels** (pump = ch1, cooler = ch2). Amped Fabrication, Wenatchee, WA.
 
-Locked v0.1 hardware: Waveshare **ESP32-S3-ETH class** brain, **802.3af PoE** for logic, **GP8413** @ `0x58` for real 0–10 V, **companion current DAC** (GP8313 / GP8600 class @ `0x59`/`0x5A`) for 4–20 mA, dry active-high RUN into VFD FWD–COM, fault optos, 3× DS18B20, optional isolated RS-485.
+Locked v0.1: Waveshare **ESP32-S3-ETH + PoE Module (B)** (802.3af class 0/3), **one dual GP8413** @ `0x58` (VOUT0=pump, VOUT1=cooler), **companion current DAC** @ `0x59`/`0x5A`, dry active-high RUN into FWD–COM, VFD dry fault (closed=faulted, MCU active-low), temps **ambient / water in / water out**, isolated **RS-485 on the first PCB**, DIN rail box, hostname **amped-vfd.local**.
 
 This repo is the firmware + docs scaffold. **Mock mode builds and serves the GUI with no board attached.**
 
@@ -23,8 +23,8 @@ This repo is the firmware + docs scaffold. **Mock mode builds and serves the GUI
           ┌─────────────┬───────────┼───────────┬─────────────┐
           ▼             ▼           ▼           ▼             ▼
       hal/dac       hal/io      hal/temps   hal/rs485     net/
-      GP8413        RUN/FAULT   DS18B20     Modbus        MQTT/OTA
-      + I-DAC       FWD–COM     1-Wire      RTU master    stubs
+      GP8413        RUN/FAULT   ambient     RS-485 HW     MQTT stub
+      + I-DAC       FWD–COM     water I/O   Modbus opt-in OTA later
 ```
 
 | Layer | Owns | Must not own |
@@ -46,11 +46,12 @@ HAL interfaces stay thin (GP8413 voltage + companion current DAC are real I2C wr
 
 ## Features (v0.1 scaffold)
 
-- Dual VFD panels: manual/auto, speed %, run, fault
-- Live temps: onboard + two waterproof DS18B20
-- REST API + API-key stub (`X-Api-Key`)
-- Failsafes: per-channel hold / 0% / preset; network heartbeat; optional cooler-only-if-pump
-- MQTT publish stub, OTA stub, NVS config stub
+- Dual VFD panels: manual / **auto (temp-band)**, speed %, run, fault
+- Live temps: ambient, water in, water out (~3–5 m probes)
+- REST + single API-key (`X-Api-Key`); empty key = open LAN
+- STOP and default failsafe → **0 V / 4 mA**, RUN open; heartbeat **15 s**
+- Cooler-only-if-pump: software, default off
+- MQTT publish stub only; OTA off (USB-C first)
 - No PWM-fake analog; no secrets in git
 
 ## Repo layout
@@ -59,7 +60,7 @@ HAL interfaces stay thin (GP8413 voltage + companion current DAC are real I2C wr
 docs/hardware.md     electrical lock
 docs/io-map.md       GPIO + analog scaling
 docs/bom.md          v0.1 parts
-OPEN_QUESTIONS.md    decisions for Josh
+OPEN_QUESTIONS.md    full v0.1 lock (none blocking merge)
 src/hal/             GP8413 + current DAC, dry RUN relays, temps, RS-485
 src/app/             controller + failsafe
 src/web/             REST + HTTP
@@ -108,7 +109,7 @@ Board env is `esp32-s3-devkitc-1` with 16 MB flash, OPI PSRAM, USB-CDC on boot �
 
 Ethernet (W5500) bring-up is stubbed to DHCP in `src/web/server.cpp`. If ETH is down, optional Wi-Fi STA from `secrets.h` / NVS is the fallback. Serial prints the IP.
 
-Open `http://<ip>/`. First-boot analog is 0 V / 4 mA, RUN off.
+Open `http://<ip>/` or **http://amped-vfd.local/** once mDNS is up. First-boot analog is 0 V / 4 mA, RUN off. Flash over **USB-C** (do not also apply PoE). OTA stays disabled until later.
 
 ### Config (no secrets in git)
 
@@ -126,19 +127,21 @@ API auth: send `X-Api-Key: <key>`. If the configured key is empty, the stub acce
 | --- | --- | --- |
 | `GET` | `/api/status` | Channels, temps, heartbeat, mock flag |
 | `GET` | `/api/temps` | Three probes |
-| `POST` | `/api/vfd/1` | `{"mode":"manual"|"auto","speed_pct":0-100,"run":true}` |
+| `POST` | `/api/vfd/1` | `{"mode":"manual"|"auto","speed_pct":0-100,"run":true}` — auto = temp-band |
 | `POST` | `/api/vfd/2` | Same |
-| `GET`/`POST` | `/api/settings` | Failsafe, interlock, heartbeat, analog path |
+| `GET`/`POST` | `/api/settings` | Failsafe, interlock, heartbeat, analog path, outdoor/water bands |
 | `POST` | `/api/heartbeat` | Refresh watchdog without changing setpoints |
 
 Any authenticated `/api/*` call also refreshes the heartbeat.
 
 ## Failsafes
 
-- **Hold** — keep last commanded speed/run after timeout
-- **Zero** — 0% analog, RUN off (default)
-- **Preset** — configured `%` (RUN off unless you set `preset_run`)
-- **Interlock** — if enabled, cooler RUN is forced off unless pump is running and not faulted
+- **Zero (default, both channels)** — 0 V / 4 mA, RUN open
+- **Hold / preset** — still in settings, not the factory default
+- **STOP** — same analog drop (0 V / 4 mA), even if a speed setpoint is stored
+- **Heartbeat** — any GUI / API / later HA call; **15 s**
+- **Interlock** — software cooler-only-if-pump, default off
+- **Auto** — temp-band stub (outdoor → pump, water out → cooler)
 
 ## License
 

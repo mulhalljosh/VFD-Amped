@@ -71,9 +71,12 @@ class Rs485Modbus {
  public:
   bool begin();
   bool poll();
+  bool hw_present() const { return hw_present_; }
   bool enabled() const { return enabled_; }
+  void set_modbus_enabled(bool on) { enabled_ = on; }
 
  private:
+  bool hw_present_ = true;
   bool enabled_ = false;
 };
 

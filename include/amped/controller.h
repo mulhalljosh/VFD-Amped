@@ -21,6 +21,7 @@ class Controller {
   void apply_config();
 
   SystemStatus status() const;
+  float temp_band_speed_pct(int channel) const;
 
   void mock_set_fault(int channel, bool fault);
 

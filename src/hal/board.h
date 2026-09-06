@@ -16,6 +16,7 @@
 #define AMPED_PIN_RUN2 40
 #define AMPED_PIN_FAULT2 41
 
+// Isolated RS-485 is populated on the first PCB. Modbus map is software opt-in.
 #define AMPED_PIN_RS485_TX 1
 #define AMPED_PIN_RS485_RX 2
 #define AMPED_PIN_RS485_DE 42
